@@ -1,0 +1,94 @@
+name: Build and Release
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Get Version
+        id: get_version
+        run: |
+          version=$(grep '^plugin_version' gradle.properties | cut -d'=' -f2 | xargs)
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Get Plugin Name
+        id: get_plugin_name
+        run: |
+          plugin_name=$(grep '^plugin_name' gradle.properties | cut -d'=' -f2 | xargs)
+          echo "plugin_name=$plugin_name" >> $GITHUB_ENV
+
+      - name: Set commit hash
+        run: echo "commit_hash=$(git rev-parse --short=6 HEAD)" >> $GITHUB_ENV
+
+      - name: Get Latest Tag
+        id: get_latest_tag
+        uses: actions-ecosystem/action-get-latest-tag@v1
+        with:
+          semver_only: false
+          with_initial_version: true
+          initial_version: v0.0.0
+
+      - name: Get Compare Link
+        id: get_compare
+        run: |
+          LAST_TAG=${{ steps.get_latest_tag.outputs.tag }}
+          CURRENT_TAG=v${{ env.version }}-${GITHUB_SHA}
+          if [ -n "$LAST_TAG" ]; then
+            COMPARE_URL="https://github.com/${GITHUB_REPOSITORY}/compare/$LAST_TAG...$CURRENT_TAG"
+          else
+            COMPARE_URL="https://github.com/${GITHUB_REPOSITORY}/commits/$CURRENT_TAG"
+          fi
+          echo "compare_url=$COMPARE_URL" >> $GITHUB_ENV
+
+      - name: Get Minecraft Versions
+        id: get_minecraft_versions
+        run: |
+          mc_version=$(grep '^minecraft_version' gradle.properties | cut -d'=' -f2 | xargs)
+          versions=$(jq -r --arg mc_version "$mc_version" '.["Minecraft-Versions"] | map(if . == "${project.minecraft_version}" then $mc_version else . end) | join(", ")' src/main/resources/rusherhack-plugin.json)
+          echo "minecraft_versions=$versions" >> $GITHUB_ENV
+
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.version }}-${{ env.commit_hash }}
+          release_name: ${{ github.repository }} for ${{ env.minecraft_versions }}
+          body: |
+            full changes: [view commit(s)](${{ env.compare_url }})
+            version: ${{ env.version }}
+            mc version(s): ${{ env.minecraft_versions }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/libs/${{ env.plugin_name }}-${{ env.version}}.jar
+          asset_name: ${{ env.plugin_name }}-${{ env.version}}.jar
+          asset_content_type: application/java-archive
