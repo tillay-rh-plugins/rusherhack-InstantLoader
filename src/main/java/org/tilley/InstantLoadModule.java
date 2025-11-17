@@ -59,7 +59,7 @@ public class InstantLoadModule extends ToggleableModule {
             }
 
         } else if (event.getPacket() instanceof ClientboundSystemChatPacket packet && chatMsgs.getValue()) {
-            PlayerMessage m = PlayerMessage.parse(packet.content().toString(), true);
+            PlayerMessage m = PlayerMessage.parse(packet.content().toString(), false);
 
             if (m.getSender() == null || !m.getSender().equalsIgnoreCase(username.getValue())) return;
             if (m.getMessage().toLowerCase().contains(chatText.getValue().toLowerCase()) || chatText.getValue().isEmpty()) {
