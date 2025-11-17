@@ -59,8 +59,7 @@ public class InstantLoadModule extends ToggleableModule {
             }
 
         } else if (event.getPacket() instanceof ClientboundSystemChatPacket packet && chatMsgs.getValue()) {
-            PlayerMessage m = PlayerMessage.parse(packet.content().toString(), false);
-
+            PlayerMessage m = PlayerMessage.parse(ChatUtils.stripFormatting(packet.content().getString()), true);
             if (m.getSender() == null || !m.getSender().equalsIgnoreCase(username.getValue())) return;
             if (m.getMessage().toLowerCase().contains(chatText.getValue().toLowerCase()) || chatText.getValue().isEmpty()) {
                 ChatUtils.print(m.getSender() + " has chatted trigger message!");
